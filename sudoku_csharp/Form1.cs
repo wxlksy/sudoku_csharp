@@ -13,6 +13,9 @@ namespace sudoku_csharp
 {
     public partial class Form1 : Form
     {
+        private Timer saveTimer;
+        private List<TextBox> initialCells = new List<TextBox>();
+
         public Form1()
         {
             InitializeComponent();
@@ -20,15 +23,18 @@ namespace sudoku_csharp
             comboBox1.Items.Add("Medium");
             comboBox1.Items.Add("Hard");
             InitializeSudokuGrid();
+            LoadSudokuState();
+
+            saveTimer = new Timer();
+            saveTimer.Interval = 60000; // 1 minute
+            saveTimer.Tick += SaveTimer_Tick;
+            saveTimer.Start();
         }
 
         private void InitializeSudokuGrid()
         {
-
             tableLayoutPanel1.ColumnCount = 9;
             tableLayoutPanel1.RowCount = 9;
-            var a =  tableLayoutPanel1.ColumnStyles;
-
 
             for (int i = 0; i < 9; i++)
             {
@@ -39,6 +45,7 @@ namespace sudoku_csharp
                     textBox.Dock = DockStyle.Fill;
                     textBox.Font = new System.Drawing.Font("Microsoft Sans Serif", 18F);
                     textBox.TextAlign = HorizontalAlignment.Center;
+                    textBox.TextChanged += TextBox_TextChanged;
 
                     tableLayoutPanel1.Controls.Add(textBox, j, i);
                 }
@@ -68,8 +75,146 @@ namespace sudoku_csharp
                     char c = line[j];
                     TextBox textBox = tableLayoutPanel1.Controls[$"textBox{i}{j}"] as TextBox;
                     textBox.Text = c == '0' ? "" : c.ToString();
+
+                    if (c != '0')
+                    {
+                        textBox.ReadOnly = true;
+                        textBox.BackColor = Color.LightGray;
+                        initialCells.Add(textBox);
+                    }
+                    else
+                    {
+                        textBox.ReadOnly = false;
+                        textBox.BackColor = Color.White;
+                    }
                 }
             }
+        }
+
+        private void TextBox_TextChanged(object sender, EventArgs e)
+        {
+            ValidateSudoku();
+        }
+
+        private void ValidateSudoku()
+        {
+            bool isValid = true;
+            for (int i = 0; i < 9; i++)
+            {
+                for (int j = 0; j < 9; j++)
+                {
+                    TextBox textBox = tableLayoutPanel1.Controls[$"textBox{i}{j}"] as TextBox;
+                    if (textBox.ReadOnly) continue;
+
+                    if (!IsValidInRow(i, j, textBox.Text) || !IsValidInColumn(i, j, textBox.Text) || !IsValidInBox(i, j, textBox.Text))
+                    {
+                        textBox.BackColor = Color.Red;
+                        isValid = false;
+                    }
+                    else
+                    {
+                        textBox.BackColor = Color.White;
+                    }
+                }
+            }
+
+            if (isValid && IsSudokuComplete())
+            {
+                MessageBox.Show("Sudoku solved correctly!");
+                foreach (Control control in tableLayoutPanel1.Controls)
+                {
+                    if (control is TextBox tb)
+                    {
+                        tb.BackColor = Color.Green;
+                    }
+                }
+            }
+        }
+
+        private bool IsValidInRow(int row, int col, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return true;
+
+            for (int j = 0; j < 9; j++)
+            {
+                if (j == col) continue;
+                TextBox textBox = tableLayoutPanel1.Controls[$"textBox{row}{j}"] as TextBox;
+                if (textBox.Text == value) return false;
+            }
+            return true;
+        }
+
+        private bool IsValidInColumn(int row, int col, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return true;
+
+            for (int i = 0; i < 9; i++)
+            {
+                if (i == row) continue;
+                TextBox textBox = tableLayoutPanel1.Controls[$"textBox{i}{col}"] as TextBox;
+                if (textBox.Text == value) return false;
+            }
+            return true;
+        }
+
+        private bool IsValidInBox(int row, int col, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return true;
+
+            int boxStartRow = (row / 3) * 3;
+            int boxStartCol = (col / 3) * 3;
+
+            for (int i = boxStartRow; i < boxStartRow + 3; i++)
+            {
+                for (int j = boxStartCol; j < boxStartCol + 3; j++)
+                {
+                    if (i == row && j == col) continue;
+                    TextBox textBox = tableLayoutPanel1.Controls[$"textBox{i}{j}"] as TextBox;
+                    if (textBox.Text == value) return false;
+                }
+            }
+            return true;
+        }
+
+        private bool IsSudokuComplete()
+        {
+            foreach (Control control in tableLayoutPanel1.Controls)
+            {
+                if (control is TextBox tb && string.IsNullOrEmpty(tb.Text))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private void SaveSudokuState()
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 9; i++)
+            {
+                for (int j = 0; j < 9; j++)
+                {
+                    TextBox textBox = tableLayoutPanel1.Controls[$"textBox{i}{j}"] as TextBox;
+                    sb.Append(string.IsNullOrEmpty(textBox.Text) ? "0" : textBox.Text);
+                }
+                sb.AppendLine();
+            }
+            File.WriteAllText("sudoku_state.txt", sb.ToString());
+        }
+
+        private void LoadSudokuState()
+        {
+            string filePath = "sudoku_state.txt";
+            if (File.Exists(filePath))
+            {
+                LoadSudokuFromFile(filePath);
+            }
+        }
+
+        private void SaveTimer_Tick(object sender, EventArgs e)
+        {
+            SaveSudokuState();
         }
 
         private void button1_Click(object sender, EventArgs e)
